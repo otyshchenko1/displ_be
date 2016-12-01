@@ -87,6 +87,7 @@ public:
 	DisplayFrontendHandler(std::shared_ptr<DisplayItf> display, int domId,
 						   XenBackend::BackendBase& backend, int id) :
 		FrontendHandlerBase(domId, backend, id),
+		mCurrentConId(0),
 		mDisplay(display),
 		mLog("DisplayFrontend") {}
 
@@ -99,13 +100,13 @@ protected:
 
 private:
 
+	uint32_t mCurrentConId;
 	std::shared_ptr<DisplayItf> mDisplay;
 	XenBackend::Log mLog;
 
 	void createConnector(const std::string& streamPath, int conId);
 	uint32_t getDrmConnectorId();
-	void createWaylandConnector(uint32_t id, uint32_t x, uint32_t y,
-								uint32_t width, uint32_t height);
+	uint32_t createWaylandConnector(uint32_t width, uint32_t height);
 	void convertResolution(const std::string& res, uint32_t& width,
 						   uint32_t& height);
 };

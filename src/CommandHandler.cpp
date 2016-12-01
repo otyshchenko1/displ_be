@@ -24,6 +24,9 @@
 #include <cstring>
 #include <sys/mman.h>
 
+#include <wayland-client.h>
+#include <drm_fourcc.h>
+
 using std::make_pair;
 using std::memcpy;
 using std::min;
@@ -46,6 +49,13 @@ unordered_map<int, CommandHandler::CommandFn> CommandHandler::sCmdTable =
 	{XENDISPL_OP_DBUF_DESTROY,	&CommandHandler::destroyDisplayBuffer},
 	{XENDISPL_OP_SET_CONFIG,	&CommandHandler::setConfig}
 };
+unordered_map<uint32_t, uint32_t> CommandHandler::drmToWlPixelFormat =
+{
+	{DRM_FORMAT_C8, WL_SHM_FORMAT_C8},
+};
+
+unordered_map<uint64_t, shared_ptr<FrameBufferItf>> CommandHandler::mFrameBuffers;
+unordered_map<uint64_t, CommandHandler::LocalDisplayBuffer> CommandHandler::mDisplayBuffers;
 
 /*******************************************************************************
  * ConEventRingBuffer
@@ -80,6 +90,10 @@ CommandHandler::CommandHandler(shared_ptr<DisplayItf> display,
 CommandHandler::~CommandHandler()
 {
 	LOG(mLog, DEBUG) << "Delete command handler, dom: " << mDomId;
+
+	mFrameBuffers.clear();
+
+	mDisplayBuffers.clear();
 }
 
 /*******************************************************************************
@@ -169,12 +183,12 @@ void CommandHandler::attachFrameBuffer(const xendispl_req& req)
 	const xendispl_fb_attach_req* fbReq = &req.op.fb_attach;
 
 	DLOG(mLog, DEBUG) << "Handle command [ATTACH FB], handle: "
-					  << fbReq->fb_cookie << ", id: " << fbReq->fb_cookie;
+					  << fbReq->dbuf_cookie << ", id: " << fbReq->fb_cookie;
 
 	auto frameBuffer =
 			mDisplay->createFrameBuffer(getLocalDb(fbReq->dbuf_cookie),
 									    fbReq->width, fbReq->height,
-									    fbReq->pixel_format);
+									    /*fbReq->pixel_format*/1);
 
 	mFrameBuffers.emplace(fbReq->fb_cookie, frameBuffer);
 }
@@ -292,6 +306,7 @@ void CommandHandler::sendFlipEvent(uint8_t conIdx, uint64_t fb_cookie)
 
 	xendispl_evt event {};
 
+	event.type = XENDISPL_EVT_PG_FLIP;
 	event.op.pg_flip.conn_idx = conIdx;
 	event.op.pg_flip.fb_cookie = fb_cookie;
 

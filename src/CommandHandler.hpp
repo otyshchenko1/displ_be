@@ -58,6 +58,19 @@ private:
 	XenBackend::Log mLog;
 };
 
+/***************************************************************************//**
+ * Ring buffer used to send events to the frontend.
+ * @ingroup displ_be
+ ******************************************************************************/
+class BuffersStorage
+{
+public:
+
+private:
+	XenBackend::Log mLog;
+};
+
+
 /**
  * Handles commands received from the frontend.
  * @ingroup displ_be
@@ -94,14 +107,16 @@ private:
 
 	XenBackend::Log mLog;
 
+	static std::unordered_map<uint32_t, uint32_t> drmToWlPixelFormat;
+
 	struct LocalDisplayBuffer
 	{
 		std::shared_ptr<DisplayBufferItf> displayBuffer;
 		std::unique_ptr<XenBackend::XenGnttabBuffer> buffer;
 	};
 
-	std::unordered_map<uint64_t, std::shared_ptr<FrameBufferItf>> mFrameBuffers;
-	std::unordered_map<uint64_t, LocalDisplayBuffer> mDisplayBuffers;
+	static std::unordered_map<uint64_t, std::shared_ptr<FrameBufferItf>> mFrameBuffers;
+	static std::unordered_map<uint64_t, LocalDisplayBuffer> mDisplayBuffers;
 
 	void pageFlip(const xendispl_req& req);
 	void createDisplayBuffer(const xendispl_req& req);
@@ -114,8 +129,8 @@ private:
 					   std::vector<grant_ref_t>& refs);
 
 	uint32_t getLocalConnectorId();
-	std::shared_ptr<DisplayBufferItf> getLocalDb(uint64_t cookie);
-	std::shared_ptr<FrameBufferItf> getLocalFb(uint64_t cookie);
+	static std::shared_ptr<DisplayBufferItf> getLocalDb(uint64_t cookie);
+	static std::shared_ptr<FrameBufferItf> getLocalFb(uint64_t cookie);
 	void copyBuffer(uint64_t cookie);
 	void sendFlipEvent(uint8_t conIdx, uint64_t fb_id);
 };
