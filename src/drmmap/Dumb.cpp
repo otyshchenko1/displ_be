@@ -37,30 +37,37 @@ Dumb::Dumb(int mapFd, int drmFd, int domId,
 		DLOG("Dumb", DEBUG) << "Create dumb, mapFd: " << mapFd << ", drmFd: "
 							<< drmFd;
 
-		xendrmmap_ioctl_create_dumb mapreq {0};
+		drm_mode_create_dumb createReq {0};
 
-		mapreq.otherend_id = domId;
-		mapreq.grefs = const_cast<uint32_t*>(refs.data());
-		mapreq.num_grefs = refs.size();
+		createReq.width = width;
+		createReq.height = height;
+		createReq.bpp = bpp;
 
-		mapreq.dumb.width = width;
-		mapreq.dumb.height = height;
-		mapreq.dumb.bpp = bpp;
-
-		DLOG("Dumb", DEBUG) << "DRM_IOCTL_XENDRM_CREATE_DUMB";
-
-		auto ret = drmIoctl(mapFd, DRM_IOCTL_XENDRM_CREATE_DUMB, &mapreq);
+		auto ret = drmIoctl(mMappedFd, DRM_IOCTL_MODE_CREATE_DUMB, &createReq);
 
 		if (ret < 0)
 		{
-			DLOG("Dumb", ERROR) << "DRM_IOCTL_XENDRM_CREATE_DUMB";
-
-			throw DrmMapException("Cannot create mapped dumb buffer");
+			throw DrmMapException("Cannot create dumb buffer");
 		}
 
-		mStride = mapreq.dumb.pitch;
-		mSize = mapreq.dumb.size;
-		mMappedHandle = mapreq.dumb.handle;
+		mStride = createReq.pitch;
+		mSize = createReq.size;
+		mMappedHandle = createReq.handle;
+
+		xendrmmap_ioctl_map_dumb mapReq;
+
+		mapReq.handle = mMappedHandle;
+		mapReq.otherend_id = domId;
+		mapReq.grefs = const_cast<uint32_t*>(refs.data());
+		mapReq.num_grefs = refs.size();
+
+		ret = drmIoctl(mMappedFd, DRM_IOCTL_XENDRM_MAP_DUMB, &mapReq);
+
+		if (ret < 0)
+		{
+			throw DrmMapException("Cannot map dumb");
+		}
+
 
 		drm_prime_handle prime {0};
 
@@ -70,7 +77,7 @@ Dumb::Dumb(int mapFd, int drmFd, int domId,
 
 		DLOG("Dumb", DEBUG) << "DRM_IOCTL_PRIME_HANDLE_TO_FD";
 
-		ret = drmIoctl(mapFd, DRM_IOCTL_PRIME_HANDLE_TO_FD, &prime);
+		ret = drmIoctl(mMappedFd, DRM_IOCTL_PRIME_HANDLE_TO_FD, &prime);
 
 		if (ret < 0)
 		{
@@ -83,7 +90,7 @@ Dumb::Dumb(int mapFd, int drmFd, int domId,
 
 		DLOG("Dumb", DEBUG) << "DRM_IOCTL_PRIME_FD_TO_HANDLE";
 
-		ret = drmIoctl(drmFd, DRM_IOCTL_PRIME_FD_TO_HANDLE, &prime);
+		ret = drmIoctl(mFd, DRM_IOCTL_PRIME_FD_TO_HANDLE, &prime);
 
 		if (ret < 0)
 		{
@@ -119,10 +126,13 @@ void Dumb::release()
 {
 	if (mMappedHandle != 0)
 	{
-		drm_gem_close closeReq {};
+		drm_mode_destroy_dumb dreq {0};
 
-		closeReq.handle = mMappedHandle;
+		dreq.handle = mMappedHandle;
 
-		drmIoctl(mMappedFd, DRM_IOCTL_GEM_CLOSE, &closeReq);
+		if (drmIoctl(mMappedFd, DRM_IOCTL_MODE_DESTROY_DUMB, &dreq) < 0)
+		{
+			DLOG("Dumb" , ERROR) << "Cannot destroy dumb";
+		}
 	}
 }
